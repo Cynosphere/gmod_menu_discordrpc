@@ -1,13 +1,11 @@
-# [Depreciated](https://github.com/discordapp/discord-rpc/issues/191#issuecomment-395171099)
-
 # gmod_menu_discordrpc
-Discord Rich Presence that runs menu state.~~
+Discord Rich Presence that runs on the menu state.
 
 ## Prerequisets
-- [menu_plugins](https://github.com/glua/gmod-menu-plugins)
-**OR**
-- [Cashout](https://github.com/Cynosphere/Cashout)
+* gm_luamio
+
+## Planned Features
+* Linux Support
 
 ## Installation
-- Drop the lua folder of your prefered loader into your garrysmod/garrysmod root.
-- (Re-)Launch game.
+* Drop all filees into a plugin folder of a plugin loader such as [Cashout](https://github.com/Cynosphere/Cashout) or [menu_plugins](https://github.com/glua/gmod-menu-plugins) (untested).

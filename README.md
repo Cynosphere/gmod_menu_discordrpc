@@ -2,10 +2,10 @@
 Discord Rich Presence that runs on the menu state.
 
 ## Prerequisets
-* gm_luamio
+* gm_luamio (included)
 
 ## Planned Features
-* Linux Support
+* Linux Support (wip)
 * Configurability
 * Automatic asset grabbing (might be hard cause of the valve useragent being blocked...)
 

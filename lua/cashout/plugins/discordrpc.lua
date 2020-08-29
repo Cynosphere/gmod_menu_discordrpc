@@ -330,32 +330,40 @@ hook.Add("Think", Tag, function()
     end
 end)
 
-local clientside = [[
+-- only uncomment and restructure if you have a way to run lua across states
+-- not responsible if this gets you banned from servers with anticheats :^)
+--[[
+local clientside = [==[
 timer.Create("CashoutRPC", 1, 0, function()
-    if proxi then
-        local gm_name = GAMEMODE.Name
-        proxi.RunOnMenu(Format([=[
-            DiscordRPC.GameData.Server = %q
-            DiscordRPC.GameData.PlayerCount = %d
-            DiscordRPC.GameData.MaxPlayers = %d
-            DiscordRPC.GameData.IP = %q
-            DiscordRPC.GameData.Gamemode = %q
-            DiscordRPC.GameData.Map = %q
-            DiscordRPC.GameData.GamemodeName = %q
-        ]=], GetHostName(), player.GetCount(), game.MaxPlayers(), game.GetIPAddress(), engine.ActiveGamemode(), game.GetMap(), gm_name))
-    end
+    local gm_name = GAMEMODE.Name
+    local to_menu = Format([=[
+        DiscordRPC.GameData.Server = %q
+        DiscordRPC.GameData.PlayerCount = %d
+        DiscordRPC.GameData.MaxPlayers = %d
+        DiscordRPC.GameData.IP = %q
+        DiscordRPC.GameData.Gamemode = %q
+        DiscordRPC.GameData.Map = %q
+        DiscordRPC.GameData.GamemodeName = %q
+    ]=], GetHostName(), player.GetCount(), game.MaxPlayers(), game.GetIPAddress(), engine.ActiveGamemode(), game.GetMap(), gm_name)
+
+    -- do stuff if you can send from client to menu
 end)
-]]
+]==]
 
 local first = true
 hook.Add("RunOnClient", "CashoutRPC", function(name, src)
     if name:find("autorun/") and first then
-        interstate.RunOnClient([[hook.Add("Initialize", "CashoutRPC", function()
-        ]] .. clientside .. [[
-        end)]])
+        local to_client = [=[hook.Add("Initialize", "CashoutRPC", function()
+        ]=] .. clientside .. [=[
+        end)]=]
+
+        -- do stuff if you have way to menu -> client and have access to this hook
+
         first = false
     end
 end)
+
+-- only use if you have this hook
 hook.Add("LuaStateClosed", "CashoutRPC", function(state)
     if state == 0 then
         first = true
@@ -363,5 +371,6 @@ hook.Add("LuaStateClosed", "CashoutRPC", function(state)
 end)
 
 if IsInGame() then
-    interstate.RunOnClient(clientside)
+    -- send `clientside` menu -> client for hot reload
 end
+--]]

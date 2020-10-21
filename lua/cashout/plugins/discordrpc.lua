@@ -5,7 +5,7 @@ local uuid = include("rpc/uuid.lua")
 local json = include("rpc/json.lua")
 
 if _G.DiscordRPC and _G.DiscordRPC._RPC then
-    _G.DiscordRPC:Close()
+    _G.DiscordRPC._RPC:close()
 end
 
 local Tag = "DiscordRPC"
@@ -31,7 +31,8 @@ DiscordRPC.Assets = {
     ["sandbox"] = true,
     ["sandbox_modded"] = true,
     ["noicon"] = true,
-    ["terrortown"] = true
+    ["terrortown"] = true,
+    ["hvhffa"] = true,
 }
 
 function DiscordRPC:Print(...)
@@ -47,44 +48,28 @@ function DiscordRPC:FindRPC()
                 return f
             end
         end
-    elseif system.IsLinux() then -- UNTESTED
-        local path
+    elseif system.IsLinux() then
+        self:Print("Linux unsupported at the moment")
+
+        -- cant read unix sockets as files. you really shouldnt be able to in windows either
+        -- really dont want to offload to Yet Another Module
+        --[[local _env = io.open("/proc/self/environ","r"):read("*a")
+        _env = _env:Split("\0")
+        local env = {}
+        for _, line in pairs(_env) do
+            local k, v = unpack(line:Split("="))
+            env[k] = v
+        end
 
         -- $XDG_RUNTIME_DIR or $TMPDIR or $TMP or $TEMP or /tmp
-        local _XDG_RUNTIME_DIR = io.popen("echo $XDG_RUNTIME_DIR")
-        local XDG_RUNTIME_DIR = _XDG_RUNTIME_DIR:read("*a"):Trim()
-        _XDG_RUNTIME_DIR:close()
-
-        local _TMPDIR = io.popen("echo $TMPDIR")
-        local TMPDIR = _TMPDIR:read("*a"):Trim()
-        _TMPDIR:close()
-
-        local _TMP = io.popen("echo $TMP")
-        local TMP = _TMP:read("*a"):Trim()
-        _TMP:close()
-
-        local _TEMP = io.popen("echo $TEMP")
-        local TEMP = _TEMP:read("*a"):Trim()
-        _TEMP:close()
-
-        if XDG_RUNTIME_DIR ~= "" then
-            path = XDG_RUNTIME_DIR
-        elseif TMPDIR ~= "" then
-            path = TMPDIR
-        elseif TMP ~= "" then
-            path = TMP
-        elseif TEMP ~= "" then
-            path = TEMP
-        else
-            path = "/tmp"
-        end
+        local path = env["XDG_RUNTIME_DIR"] or env["TMPDIR"] or env["TMP"] or env["TEMP"] or "/tmp"
 
         for i = 0, 3 do
             local f = io.open(path .. "/discord-ipc-" .. i, "w")
             if f ~= nil then
                 return f
             end
-        end
+        end--]]
     elseif system.IsOSX() then
         self:Print("OSX unsupported at the moment")
     else
@@ -258,13 +243,15 @@ end)
     act:SetStart()
     DiscordRPC:SendData(act:Finalize())
 end)--]]
-local NextRPC = CurTime() + 15
+local NextRPC = CurTime() + 5
 DiscordRPC.GameData = {}
 
 hook.Add("Think", Tag, function()
     if not DiscordRPC._RPC then
         return
     end
+
+    local TabbedOut = not system.HasFocus()
 
     local GameData = DiscordRPC.GameData
 
@@ -292,7 +279,7 @@ hook.Add("Think", Tag, function()
         act:SetState(GameData.Server)
         act:SetStart(DiscordRPC.StartTime)
         DiscordRPC:SendData(act:Finalize())
-        NextRPC = CurTime() + 15
+        NextRPC = CurTime() + 5
     elseif not GetLoadStatus() then
         if IsInGame() then
             if NextRPC > CurTime() then
@@ -301,16 +288,18 @@ hook.Add("Think", Tag, function()
 
             local act = DiscordRPC:NewActivity()
             act:SetSmallImage("gmod", "Cashout RPC Plugin")
-            act:SetLargeImage(DiscordRPC.Assets[GameData.Gamemode] and GameData.Gamemode or "noicon", "Gamemode: " .. (GameData.GamemodeName and Format("%s (%s)", GameData.GamemodeName, GameData.Gamemode) or GameData.Gamemode))
+            act:SetLargeImage(GameData.Gamemode and DiscordRPC.Assets[GameData.Gamemode] and GameData.Gamemode or "noicon", "Gamemode: " .. (GameData.GamemodeName and Format("%s (%s)", GameData.GamemodeName, GameData.Gamemode) or GameData.Gamemode))
             act:SetDetails(GameData.Server)
-            act:SetState(GameData.Map)
+            local state = (TabbedOut and "Tabbed Out " or "") .. (GameData.IsAFK and ((TabbedOut and "+ " or "") .. "AFK ") or "") .. ((TabbedOut or GameData.IsAFK) and "- " or "")
+            local map = GameData.NearestLandmark and GameData.NearestLandmark ~= "nil" and ("Near " .. GameData.NearestLandmark:gsub("^land_",""):gsub("^.",string.upper) .. Format(" [%s]", GameData.Map)) or GameData.Map
+            act:SetState(state .. map)
             act:SetStart(DiscordRPC.StartTime)
             if GameData.PlayerCount and GameData.MaxPlayers then
                 act:SetParty(GameData.PlayerCount, GameData.MaxPlayers)
             end
 
             DiscordRPC:SendData(act:Finalize())
-            NextRPC = CurTime() + 15
+            NextRPC = CurTime() + 5
         else
             if GameData then
                 GameData = {}
@@ -322,10 +311,10 @@ hook.Add("Think", Tag, function()
 
             local act = DiscordRPC:NewActivity()
             act:SetLargeImage("gmod", "Cashout RPC Plugin")
-            act:SetDetails("In Menus")
+            act:SetDetails("In Menus" .. (TabbedOut and " (Tabbed Out)" or ""))
             act:SetStart(DiscordRPC.StartTime)
             DiscordRPC:SendData(act:Finalize())
-            NextRPC = CurTime() + 15
+            NextRPC = CurTime() + 5
         end
     end
 end)
@@ -335,25 +324,33 @@ end)
 --[[
 local clientside = [==[
 timer.Create("CashoutRPC", 1, 0, function()
-    local gm_name = GAMEMODE.Name
-    local to_menu = Format([=[
-        DiscordRPC.GameData.Server = %q
-        DiscordRPC.GameData.PlayerCount = %d
-        DiscordRPC.GameData.MaxPlayers = %d
-        DiscordRPC.GameData.IP = %q
-        DiscordRPC.GameData.Gamemode = %q
-        DiscordRPC.GameData.Map = %q
-        DiscordRPC.GameData.GamemodeName = %q
-    ]=], GetHostName(), player.GetCount(), game.MaxPlayers(), game.GetIPAddress(), engine.ActiveGamemode(), game.GetMap(), gm_name)
+    if proxi then
+        local gm_name = GAMEMODE.Name
+        proxi.RunOnMenu(Format([=[
+            DiscordRPC.GameData.Server = %q
+            DiscordRPC.GameData.PlayerCount = %d
+            DiscordRPC.GameData.MaxPlayers = %d
+            DiscordRPC.GameData.IP = %q
+            DiscordRPC.GameData.Gamemode = %q
+            DiscordRPC.GameData.Map = %q
+            DiscordRPC.GameData.GamemodeName = %q
+            DiscordRPC.GameData.IsAFK = %s
+        ]=], GetHostName(), player.GetCount(), game.MaxPlayers(), game.GetIPAddress(), engine.ActiveGamemode(), game.GetMap(), gm_name, LocalPlayer().IsAFK and tostring(LocalPlayer():IsAFK()) or "false"))
 
-    -- do stuff if you can send from client to menu
+        if landmark then
+            local succ, nearest = pcall(landmark.nearest, LocalPlayer():GetPos())
+            if succ ~= false then
+                proxi.RunOnMenu(Format("DiscordRPC.GameData.NearestLandmark = %q", nearest))
+            end
+        end
+    end
 end)
 ]==]
 
 local first = true
 hook.Add("RunOnClient", "CashoutRPC", function(name, src)
     if name:find("autorun/") and first then
-        local to_client = [=[hook.Add("Initialize", "CashoutRPC", function()
+        local to_client = [=[hook.Add("InitPostEntity", "CashoutRPC", function()
         ]=] .. clientside .. [=[
         end)]=]
 
@@ -367,6 +364,9 @@ end)
 hook.Add("LuaStateClosed", "CashoutRPC", function(state)
     if state == 0 then
         first = true
+
+        DiscordRPC.GameData.IsAFK = false
+        DiscordRPC.GameData.NearestLandmark = nil
     end
 end)
 

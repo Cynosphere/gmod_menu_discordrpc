@@ -36,8 +36,15 @@ DiscordRPC.Assets = {
 }
 
 function DiscordRPC:Print(...)
+    local args = {...}
+
+    for k, v in pairs(args) do
+        args[k] = tostring(v)
+    end
+
     MsgC(Color(114, 137, 218), "[DiscordRPC] ")
-    print(...)
+    MsgC(Color(255, 255, 255), table.concat(args, "\t"))
+    Msg("\n")
 end
 
 function DiscordRPC:FindRPC()
@@ -48,12 +55,8 @@ function DiscordRPC:FindRPC()
                 return f
             end
         end
-    elseif system.IsLinux() then
-        self:Print("Linux unsupported at the moment")
-
-        -- cant read unix sockets as files. you really shouldnt be able to in windows either
-        -- really dont want to offload to Yet Another Module
-        --[[local _env = io.open("/proc/self/environ","r"):read("*a")
+    elseif system.IsLinux() then -- UNTESTED
+        local _env = io.open("/proc/self/environ","r"):read("*a")
         _env = _env:Split("\0")
         local env = {}
         for _, line in pairs(_env) do
@@ -69,7 +72,7 @@ function DiscordRPC:FindRPC()
             if f ~= nil then
                 return f
             end
-        end--]]
+        end
     elseif system.IsOSX() then
         self:Print("OSX unsupported at the moment")
     else
@@ -236,13 +239,29 @@ concommand.Add("discordrpc_toggledebug", function()
     cookie.Set("discordrpc_debug", old == 0 and 1 or 0)
 end)
 
---[[hook.Add("InGame",Tag,function(state)
-    local act = DiscordRPC:NewActivity()
-    act:SetLargeImage("gmod","Cashout RPC Plugin")
-    act:SetDetails(state and "In Game" or "In Menus")
-    act:SetStart()
-    DiscordRPC:SendData(act:Finalize())
-end)--]]
+if Cashout.Plugins then
+    Cashout.Plugins:AddMenuItem("discordrpc", "Stop RPC", function()
+        if DiscordRPC._RPC then
+            DiscordRPC:Close()
+        else
+            DiscordRPC:Print("Already stopped")
+        end
+    end)
+
+    Cashout.Plugins:AddMenuItem("discordrpc", "Restart RPC", function()
+        if DiscordRPC._RPC then
+            DiscordRPC:Close()
+        end
+
+        DiscordRPC:Init()
+    end)
+
+    Cashout.Plugins:AddMenuItem("discordrpc", "Toggle Debug", function()
+        local old = cookie.GetNumber("discordrpc_debug", 0)
+        cookie.Set("discordrpc_debug", old == 0 and 1 or 0)
+    end)
+end
+
 local NextRPC = CurTime() + 5
 DiscordRPC.GameData = {}
 
@@ -274,7 +293,7 @@ hook.Add("Think", Tag, function()
 
         local act = DiscordRPC:NewActivity()
         act:SetSmallImage("gmod", "Cashout RPC Plugin")
-        act:SetLargeImage(DiscordRPC.Assets[GameData.Gamemode] and GameData.Gamemode or "noicon", "Gamemode: " .. GameData.Gamemode)
+        act:SetLargeImage(DiscordRPC.Assets[GameData.Gamemode] and GameData.Gamemode or "noicon", "Gamemode: " .. GameData.Gamemode or g_GameMode or "<unknown>")
         act:SetDetails("Loading into " .. GameData.Map)
         act:SetState(GameData.Server)
         act:SetStart(DiscordRPC.StartTime)
@@ -288,10 +307,10 @@ hook.Add("Think", Tag, function()
 
             local act = DiscordRPC:NewActivity()
             act:SetSmallImage("gmod", "Cashout RPC Plugin")
-            act:SetLargeImage(GameData.Gamemode and DiscordRPC.Assets[GameData.Gamemode] and GameData.Gamemode or "noicon", "Gamemode: " .. (GameData.GamemodeName and Format("%s (%s)", GameData.GamemodeName, GameData.Gamemode) or GameData.Gamemode))
-            act:SetDetails(GameData.Server)
+            act:SetLargeImage(GameData.Gamemode and DiscordRPC.Assets[GameData.Gamemode] and GameData.Gamemode or g_GameMode or "noicon", "Gamemode: " .. (GameData.GamemodeName and Format("%s (%s)", GameData.GamemodeName, GameData.Gamemode) or GameData.Gamemode or g_GameMode or "<unknown>"))
+            act:SetDetails(GameData.Server or g_ServerName ~= "" and g_ServerName or "<unknown>")
             local state = (TabbedOut and "Tabbed Out " or "") .. (GameData.IsAFK and ((TabbedOut and "+ " or "") .. "AFK ") or "") .. ((TabbedOut or GameData.IsAFK) and "- " or "")
-            local map = GameData.NearestLandmark and GameData.NearestLandmark ~= "nil" and ("Near " .. GameData.NearestLandmark:gsub("^land_",""):gsub("^.",string.upper) .. Format(" [%s]", GameData.Map)) or GameData.Map
+            local map = GameData.NearestLandmark and GameData.NearestLandmark ~= "nil" and ("Near " .. GameData.NearestLandmark:gsub("^land_",""):gsub("^.",string.upper) .. Format(" [%s]", GameData.Map)) or (GameData.Map ~= "" and GameData.Map or (g_MapName ~= "" and g_MapName or "<unknown>"))
             act:SetState(state .. map)
             act:SetStart(DiscordRPC.StartTime)
             if GameData.PlayerCount and GameData.MaxPlayers then
